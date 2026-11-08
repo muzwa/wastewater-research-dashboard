@@ -122,23 +122,53 @@ def clean(df):
 st.markdown("### 🧪 Wastewater Pharmaceutical Monitoring")
 st.caption("PhD research analytics prototype · Fictional records · ng/L")
 
-with st.sidebar:
-    st.header("Data & filters")
-    uploaded = st.file_uploader("Upload laboratory measurements", type=["xlsx", "csv"])
-    st.caption("An uploaded file changes only YOUR session. It is not shared with colleagues or saved.")
+st.subheader("🔎 Filter your dashboard")
+st.caption("These controls apply to all charts, tables and calculations. They stay visible on phones and computers.")
+
+with st.expander("📁 Upload another Excel or CSV file (optional)", expanded=False):
+    uploaded = st.file_uploader("Laboratory measurements", type=["xlsx", "csv"])
+    st.caption("Uploads affect only your current session. Other visitors continue to see the built-in dummy data.")
+
 try:
     data = clean(read_uploaded(uploaded) if uploaded is not None else demo_data())
 except Exception as exc:
     st.error(f"Data validation error: {exc}")
     st.stop()
 
-with st.sidebar:
-    sites = st.multiselect("Sampling locations", list(SITES.keys()), default=list(SITES.keys()), format_func=lambda s: SITES[s])
-    compounds = st.multiselect("Antibiotics", list(CHEMS.keys()), default=list(CHEMS.keys()), format_func=lambda c: CHEMS[c])
+with st.container(border=True):
+    sites = st.multiselect(
+        "Sampling locations", options=list(SITES.keys()),
+        default=list(SITES.keys()), format_func=lambda site: SITES[site],
+        help="Remove or add a location to update the charts."
+    )
+    compounds = st.multiselect(
+        "Antibiotics", options=list(CHEMS.keys()),
+        default=list(CHEMS.keys()), format_func=lambda code: CHEMS[code],
+        help="Choose one or more antibiotic residues."
+    )
     dmin = data["collection_date"].min().date()
     dmax = data["collection_date"].max().date()
-    dates = st.date_input("Collection dates", value=(dmin, dmax), min_value=dmin, max_value=dmax)
-    st.caption("Live multi-user storage and authentication are not included in this demonstration.")
+    period = st.radio(
+        "Date range", ["All dates", "Last 14 days", "Custom range"],
+        horizontal=True, help="Select a preset or specify exact collection dates."
+    )
+    if period == "Custom range":
+        selected_dates = st.date_input(
+            "From / To", value=(dmin, dmax), min_value=dmin, max_value=dmax,
+            format="DD/MM/YYYY"
+        )
+        if not isinstance(selected_dates, (list, tuple)) or len(selected_dates) != 2:
+            st.info("Please select both the start and end dates.")
+            st.stop()
+        dates = tuple(selected_dates)
+    elif period == "Last 14 days":
+        from datetime import timedelta
+        dates = (max(dmin, dmax - timedelta(days=13)), dmax)
+    else:
+        dates = (dmin, dmax)
+    st.caption(f"Showing collection dates: {dates[0]:%d %b %Y} – {dates[1]:%d %b %Y}")
+
+st.caption("This is a demonstration. No shared database or user accounts are connected.")
 
 if not compounds or not sites:
     st.info("Select at least one sampling location and antibiotic.")
