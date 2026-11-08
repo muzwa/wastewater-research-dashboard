@@ -119,138 +119,24 @@ def clean(df):
     return df
 
 
-st.markdown("### 🧪 Wastewater Pharmaceutical Monitoring")
-st.caption("PhD research analytics prototype · Fictional records · ng/L")
 
-st.subheader("🔎 Filter your dashboard")
-st.caption("These controls apply to all charts, tables and calculations. They stay visible on phones and computers.")
+# Embed the user's preferred original HTML dashboard rather than Streamlit's
+# default widgets. The original controls, cards, tabs and charts remain in place.
+from pathlib import Path
 
-with st.expander("📁 Upload another Excel or CSV file (optional)", expanded=False):
-    uploaded = st.file_uploader("Laboratory measurements", type=["xlsx", "csv"])
-    st.caption("Uploads affect only your current session. Other visitors continue to see the built-in dummy data.")
-
-try:
-    data = clean(read_uploaded(uploaded) if uploaded is not None else demo_data())
-except Exception as exc:
-    st.error(f"Data validation error: {exc}")
-    st.stop()
-
-with st.container(border=True):
-    sites = st.multiselect(
-        "Sampling locations", options=list(SITES.keys()),
-        default=list(SITES.keys()), format_func=lambda site: SITES[site],
-        help="Remove or add a location to update the charts."
-    )
-    compounds = st.multiselect(
-        "Antibiotics", options=list(CHEMS.keys()),
-        default=list(CHEMS.keys()), format_func=lambda code: CHEMS[code],
-        help="Choose one or more antibiotic residues."
-    )
-    dmin = data["collection_date"].min().date()
-    dmax = data["collection_date"].max().date()
-    period = st.radio(
-        "Date range", ["All dates", "Last 14 days", "Custom range"],
-        horizontal=True, help="Select a preset or specify exact collection dates."
-    )
-    if period == "Custom range":
-        selected_dates = st.date_input(
-            "From / To", value=(dmin, dmax), min_value=dmin, max_value=dmax,
-            format="DD/MM/YYYY"
-        )
-        if not isinstance(selected_dates, (list, tuple)) or len(selected_dates) != 2:
-            st.info("Please select both the start and end dates.")
-            st.stop()
-        dates = tuple(selected_dates)
-    elif period == "Last 14 days":
-        from datetime import timedelta
-        dates = (max(dmin, dmax - timedelta(days=13)), dmax)
-    else:
-        dates = (dmin, dmax)
-    st.caption(f"Showing collection dates: {dates[0]:%d %b %Y} – {dates[1]:%d %b %Y}")
-
-st.caption("This is a demonstration. No shared database or user accounts are connected.")
-
-if not compounds or not sites:
-    st.info("Select at least one sampling location and antibiotic.")
-    st.stop()
-if len(dates) != 2:
-    st.info("Select both start and end dates.")
-    st.stop()
-df = data.loc[data["site"].isin(sites) & data["code"].isin(compounds) &
-              data["collection_date"].dt.date.between(*dates)].copy()
-if df.empty:
-    st.info("No records match these filters.")
-    st.stop()
-
-total = len(df)
-quant = df["status"].eq("Quantified")
-below = df["status"].eq("Detected <LOQ")
-not_detected = df["status"].eq("Not detected")
-k1, k2, k3, k4, k5 = st.columns(5)
-k1.metric("Samples", df["sample_id"].nunique())
-k2.metric("Analyses", total)
-k3.metric("Quantified", int(quant.sum()))
-k4.metric("Detection frequency", f"{(1-not_detected.mean())*100:.1f}%")
-k5.metric("Below LOQ / ND", f"{int(below.sum())} / {int(not_detected.sum())}")
-
-overview, trends, treatment, records = st.tabs(
-    ["📊 Overview", "📈 Research trends", "💧 Inlet / outlet", "🗂️ Records & quality"]
+st.markdown(
+    """
+    <style>
+    .stApp { background: #f6f9fb; }
+    .block-container { max-width: 100% !important; padding: 0 !important; }
+    [data-testid="stHeader"] { background: transparent; height: 1.2rem; }
+    [data-testid="stToolbar"], [data-testid="collapsedControl"] { display: none; }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
-with overview:
-    st.subheader("Mean quantified concentration by sampling location")
-    avg = df.loc[quant].groupby(["site_label", "code"], as_index=False)["concentration_ng_l"].mean()
-    if not avg.empty:
-        st.plotly_chart(px.bar(avg, x="site_label", y="concentration_ng_l", color="code",
-                               barmode="group", labels={"concentration_ng_l": "ng/L", "site_label": "Location"}),
-                        use_container_width=True)
-    st.subheader("Reporting statuses")
-    counts = df.groupby(["site_label", "status"]).size().reset_index(name="results")
-    st.plotly_chart(px.bar(counts, x="site_label", y="results", color="status", barmode="stack"),
-                    use_container_width=True)
-    st.info("Only quantified results are included in means. Below-LOQ and non-detected results are not set to zero.")
 
-with trends:
-    choice = st.selectbox("Antibiotic for time trend", compounds, format_func=lambda c: CHEMS[c])
-    t = df.loc[quant & df["code"].eq(choice)]
-    if not t.empty:
-        st.plotly_chart(px.line(t, x="collection_date", y="concentration_ng_l", color="site_label",
-                                markers=True, labels={"collection_date": "Date", "concentration_ng_l": "ng/L"}),
-                        use_container_width=True)
-    st.subheader("Quantified measurement distributions")
-    if quant.any():
-        st.plotly_chart(px.box(df.loc[quant], x="code", y="concentration_ng_l", points="all",
-                               labels={"concentration_ng_l": "ng/L"}), use_container_width=True)
-        st.dataframe(df.loc[quant].groupby("code")["concentration_ng_l"]
-                     .agg(["count", "mean", "median", "min", "max"]).round(1), use_container_width=True)
-
-with treatment:
-    st.subheader("Date-matched inlet/outlet concentration comparison")
-    pair = df.loc[quant & df["site"].isin(["IN", "OUT"])].pivot_table(
-        index=["collection_date", "code"], columns="site", values="concentration_ng_l", aggfunc="mean"
-    )
-    if {"IN", "OUT"}.issubset(pair.columns):
-        pair = pair.dropna(subset=["IN", "OUT"]).reset_index()
-        pair = pair[pair["IN"] > 0]
-        pair["apparent_reduction_pct"] = (1 - pair["OUT"] / pair["IN"]) * 100
-        if not pair.empty:
-            st.plotly_chart(px.line(pair, x="collection_date", y="apparent_reduction_pct",
-                                    color="code", markers=True, labels={"apparent_reduction_pct": "Apparent reduction (%)"}),
-                            use_container_width=True)
-            st.dataframe(pair.round(2), use_container_width=True, hide_index=True)
-    else:
-        st.info("Select both IN and OUT sites to show paired observations.")
-    st.warning("Same-date concentration differences are NOT validated treatment efficiencies. Flow and hydraulic residence time must be considered.")
-
-with records:
-    st.subheader("Laboratory measurement records")
-    display = df.drop(columns=["site_label", "compound_label"])
-    st.dataframe(display, hide_index=True, use_container_width=True)
-    st.download_button("Download filtered CSV", display.to_csv(index=False).encode("utf-8"),
-                       file_name="wastewater_filtered.csv", mime="text/csv")
-    st.subheader("Data quality")
-    st.dataframe(df["status"].value_counts().rename_axis("Status").reset_index(name="Count"),
-                 use_container_width=True, hide_index=True)
-    st.caption("Illustrative LOD/LOQ values are not laboratory-validated.")
-
-st.divider()
-st.caption("Research demonstration only · No regulatory or health-risk conclusions · Uploaded files are session-local.")
+template = Path(__file__).with_name("dashboard_template.html").read_text(encoding="utf-8")
+records_json = demo_data().to_json(orient="records").replace("<", "\\u003c")
+html_page = template.replace("__DATA__", records_json)
+st.iframe(html_page, width="stretch", height="content")
