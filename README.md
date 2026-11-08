@@ -1,42 +1,70 @@
-# Wastewater Pharmaceutical Monitoring — Research Dashboard
+# Wastewater Research Analytics Dashboard
 
-Interactive dashboard for **fictional wastewater antibiotic measurements** supporting a PhD research prototype. There are 20 samples from four sampling locations across five dates, containing 60 analyte observations for ciprofloxacin (CIP), sulfamethoxazole (SMX), and trimethoprim (TMP).
+Working PhD wastewater research analytics prototype, preserving the original dashboard appearance. **All data in this PUBLIC repository is fictional.**
 
-**All measurements are invented. Do not use this demo for scientific conclusions, clinical decisions, or regulatory compliance.**
+## Live dashboard
 
-## Run locally
+https://wastewater-research-dashboard-ttkm8equrfrrbhjstkepmh.streamlit.app/
+
+## Data storage without SQL
+
+- `data/master_data.csv` contains all approved measurements. It starts with 20 fictional samples and 60 analyses.
+- The authorised laboratory uploader selects **Data Management — upload new Excel records** above the dashboard.
+- The app validates all measurements, skips exact duplicates, and stops if conflicting results are found.
+- After approval, the updated master CSV and an unchanged copy of the uploaded Excel/CSV file in `data/archive/` are recorded **together in one GitHub commit**.
+- Streamlit Cloud normally redeploys from GitHub automatically. Existing measurements remain available.
+
+## One-time setup for permanent uploads
+
+This repository is **public**. Use fictional or explicitly public demonstration data only.
+
+1. Open https://github.com/settings/personal-access-tokens/new to create a **fine-grained personal access token**:
+   - Resource owner: `muzwa`
+   - Repository access: **Only select repositories**, then `wastewater-research-dashboard`.
+   - Repository permission: **Contents → Read and write**.
+   - Set a reasonable expiration and renew later as necessary.
+2. Go to https://share.streamlit.io/ and open this application's menu, then **Settings → Secrets**.
+3. Add these two values, using your own secret token and a long unique uploader password:
+
+```toml
+GITHUB_TOKEN = "YOUR_GITHUB_FINE_GRAINED_TOKEN"
+UPLOAD_PASSWORD = "YOUR_STRONG_UNIQUE_UPLOAD_PASSWORD"
+```
+
+4. Save the secrets. Open the dashboard and expand **Data Management — upload new Excel records**.
+5. Enter your uploader password, choose an Excel workbook, review the validation report, and approve appending the new measurements.
+
+**Never paste the token/password in a chat, GitHub source file or public screenshot.**
+
+## Excel format
+
+Use the established three-sheet workbook. The importer reads its **Measurements** worksheet. It also accepts a tidy CSV with these columns:
+
+```text
+measurement_id, sample_id, collection_date, site, code, antibiotic,
+reported_result, status, concentration_ng_l, lod_ng_l, loq_ng_l
+```
+
+Each measurement is uniquely identified by `(sample_id, code)`. The current demo recognises sites HOSP, IN, OUT, RIV and codes CIP, SMX, TMP. Units: ng/L.
+
+Scientific integrity:
+- Quantified measurements are numeric and at or above their stated LOQ.
+- `ND` and `<LOQ` values are not converted to zero.
+- Conflicting measurements are not overwritten.
+- The original uploaded file is archived unchanged.
+- Illustrative reporting limits are **not** laboratory-validated.
+
+## Privacy and deployment limitations
+
+This is a **public synthetic-data demonstration**. A GitHub token and uploader password only protect **write access**. All committed files, including archive files and earlier versions, remain publicly visible.
+
+**Do not upload actual unpublished PhD research results, sponsor-restricted materials, private records, or other confidential information to this repository.** Moving to real institutional use will require approved private storage, authenticated viewing, audit trails, backup/restore arrangements, and data governance. PostgreSQL can be added later without redesigning the current dashboard.
+
+## Local development
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Deploy online
-
-Visit https://share.streamlit.io/ and sign in with GitHub. Click **Create app** / **Deploy**, choose repository `muzwa/wastewater-research-dashboard`, branch `main`, and main file path `app.py`. Select a unique subdomain if offered, then deploy.
-
-## Dashboard pages
-
-- Overview: summary measurements and detection-status breakdown
-- Research trends: antibiotic concentration timelines, distributions and summary statistics
-- Inlet / outlet: matched-date apparent concentration reductions
-- Records & quality: individual observations and filtered CSV download
-
-The sidebar filters date, site, and chemical. Uploading a compatible Excel/CSV file changes **only the current browser session**.
-
-## Excel format
-
-The prototype accepts the earlier research workbook with a `Measurements` sheet, with headings including `Measurement ID`, `Sample ID`, `Collection date`, `Site`, `Code`, `Reported result (ng/L)`, `Result status`, `Numeric conc. (ng/L)`, `LOD (ng/L)`, and `LOQ (ng/L)`. It also accepts a tidy CSV with the corresponding lowercase underscore column names.
-
-## Scientific safeguards
-
-- Non-detects and detected-below-LOQ results have blank numerical concentrations, never artificial zero values.
-- Means and plots of concentration use only quantified results.
-- The illustrative LOD/LOQ values must be replaced with method-specific validated limits before real research use.
-- Identical-date inlet/outlet comparisons do not necessarily represent true treatment removal rates; hydraulic retention, matching protocols, flow, and sampling design matter.
-
-## Privacy and use
-
-This repository is public and contains fictional data only. **Do not commit unpublished, private, identifiable, or sponsor-restricted research data** to this repository. Community Cloud is suitable for a public demonstration; a production workflow needs institution-approved private storage, authentication, access roles, audit logs, and research data governance.
-
-Uploads are temporary and do not update colleagues' dashboards. SQL storage is a possible future phase, not part of this version.
+Without the two Streamlit secrets, the analytics dashboard is viewable, but permanent uploads remain disabled.
