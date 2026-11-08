@@ -123,6 +123,7 @@ def clean(df):
 # Embed the user's preferred original HTML dashboard rather than Streamlit's
 # default widgets. The original controls, cards, tabs and charts remain in place.
 from pathlib import Path
+from data_manager import current_master, upload_panel
 
 st.markdown(
     """
@@ -136,7 +137,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+upload_panel(clean)
+data = clean(current_master())
 template = Path(__file__).with_name("dashboard_template.html").read_text(encoding="utf-8")
-records_json = demo_data().to_json(orient="records").replace("<", "\\u003c")
-html_page = template.replace("__DATA__", records_json)
+records_json = data.to_json(orient="records").replace("<", "\\u003c")
+html_page = (template.replace("__DATA__", records_json)
+             .replace("__SAMPLE_COUNT__", str(data["sample_id"].nunique()))
+             .replace("__ANALYSIS_COUNT__", str(len(data))))
 st.iframe(html_page, width="stretch", height="content")
